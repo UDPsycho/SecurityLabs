@@ -993,9 +993,324 @@
 
 ---
 
-<!--
-## **Business Logic Vulnerabilities**
+## **[Business Logic Vulnerabilities][business_logic]**
 
+### [Excessive trust in client-side controls][business_logic_1]
+
+1. #### **Excessive trust in client-side controls**
+
+    - After login try to buy the product and take note of the URL flow and the parameters sent, the message  
+    ***Not enough store credit for this purchase*** will appear when you try to **Place order**.
+
+    ```plaintext
+    ...
+    https://<lab_url>/cart      POST    (productId=1&redir=PRODUCT&quantity=1&price=133700)
+    ...
+    ```
+
+    - **Remove** the product from the cart.
+    - Send the **/cart POST** request to the **Repeater**.
+    - Set the product **price** to any value below your current balance and repeat the request.
+    - Reload the page and proceed to **Place order**  
+    (notice that the **Total** becomes the set price).
+
+2. #### **2FA broken logic** (repeated)
+
+    > 📝 **Note:**
+    <mark>This example is located within the **Vulnerabilities in multi-factor authentication**
+    section of the **Authentication** topic.</mark>
+
+### [Failing to handle unconventional input][business_logic_2]
+
+1. #### **High-level logic vulnerability**
+
+    - After login try to buy the product and take note of the URL flow and the parameters sent, the message  
+    ***Not enough store credit for this purchase*** will appear when you try to **Place order**.
+
+    ```plaintext
+    ...
+    https://<lab_url>/cart      POST    (productId=1&redir=PRODUCT&quantity=1)
+    ...
+    ```
+
+    - **Remove** the product from the cart.
+    - Send the **/cart POST** request to the **Repeater**.
+    - Set the product **quantity** to a negative value and repeat the request.
+    - Reload the page and try to **Place order**, the message  
+    ***Cart total price cannot be less than zero*** will appear  
+    (notice that the **Total** becomes negative).
+    - **Remove** the product from the cart again.
+    - Add the product to the cart again but also add another product with a negative **quantity**  
+    as many times as you need to decrease the **Total** below your current balance, then proceed to **Place order**.
+
+2. #### **Low-level logic flaw**
+
+    > 📝 **Note:**
+    <mark>If you don't have Burp Suite Pro, you can use
+    [this][bussiness_logic_script_low_level] script to automate the attack.</mark>
+
+    - After login try to buy the product and take note of the URL flow and the parameters sent, the message  
+    ***Not enough store credit for this purchase*** will appear when you try to **Place order**.
+
+    ```plaintext
+    ...
+    https://<lab_url>/cart      POST    (productId=1&redir=PRODUCT&quantity=1)
+    ...
+    ```
+
+    - **Remove** the product from the cart.
+    - Send the **/cart POST** request to the **Repeater**.
+    - Set the product **quantity** to its maximum allowed value (**99**) and repeat the request.
+    - Reload the page and try to **Place order**, the message  
+    ***Not enough store credit for this purchase*** will appear.
+    - Repeat the request again  
+    (notice that even if you aren't able to buy the products because your current balance is lower
+    than the **Total**, it looks like there are plenty available, what will be the limit?).
+    - **Remove** the products from the cart again.
+    - Send the **/cart POST** request to the **Intruder** and configure it to **Continue indefinitely** with **Null payloads**,
+    then execute the attack and refresh the page until you observe something weird  
+    (notice that when you reach **162** request the **Total** is **$21442806.00** but when you reach
+    **163** the **Total** becomes **-$21474778.96**).
+    - Stop de **Intruder** attack.
+    - **Remove** the products from the cart once again.
+    - Configure another **Intruder** attack but use exactly **323** rounds  
+    (notice that at the middle of the process the **Total** starts to decrease until reach **-$64060.96**).
+    - Set the product **quantity** to **47** and repeat the request once again  
+    (notice that the **Total** becomes **-$1221.96**. Why 47? You should know why!).
+    - Add another product to the cart as many times as you need to increase the **Total**
+    below your current balance, then proceed to **Place order**.
+
+3. #### **Inconsistent handling of exceptional input**
+
+    > 📝 **Note:**
+    <mark>This attack is known as **SQL Truncation**.</mark>
+
+    - Open the **Email client**.
+    - Register an account and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    ...
+    https://<lab_url>/register  POST    (csrf=...&username=attacker&email=attacker%40exploit-<mail_domain>.web-security-academy.net&password=attacker)
+    ...
+    ```
+
+    - Login and try to access to **/admin**, the message  
+    ***Admin interface only available if logged in as a DontWannaCry user*** will appear.
+    - Logout and discover how the account registration process works.
+
+    ```plaintext
+    Registered username (error message: "An account already exists with that username")
+    Registered email    (error message: "An account already exists with that email")
+
+    Username value      (if more than 32 characters then error message: "Invalid username format")
+    Username value      (if contains "@" then error message: "Invalid username format")
+    Username value      (no distinction between lowercase and uppercase)
+
+    Password value      (no length restriction)
+    Email value         (no length restriction but the email is truncated at 255 characters)
+
+    ```
+
+    - Register another account but use a very long **Email** (255+ characters) and see what happens  
+    (notice that you still receive the link confirmation, but when you login, the shown email is truncated).
+
+    ```plaintext
+    https://<lab_url>/register  POST
+
+    (csrf=...&username=another_attacker&email=another_attackerrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr@%40exploit-<mail_domain>.web-security-academy.net&password=another_attacker)
+
+
+    Your email is: another_attackerrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr@exploit-<mail_domain>.web-security-
+    ```
+
+    - Register another account again but use an **Email** with **dontwannacry.com**
+    as a subdomain for the email domain and the length enough to be truncated at the end of **dontwannacry.com**, then login  
+    (notice that your role has been set by default as administrator).
+
+    ```plaintext
+    https://<lab_url>/register  POST
+
+    (csrf=...&username=psycho&email=psychooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo@dontwannacry.com.exploit-<mail_domain>.web-security-academy.net&password=psycho)
+
+
+    Your email is: psychooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo@dontwannacry.com
+    ```
+
+### [Making flawed assumptions about user behavior][business_logic_3]
+
+1. #### **Inconsistent security controls**
+
+    - Open the **Email client**.
+    - Register an account and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    ...
+    https://<lab_url>/register  POST    (csrf=...&username=attacker&email=attacker%40exploit-<lab_domain>.web-security-academy.net&password=attacker)
+    ...
+    ```
+
+    - Login and observe that there's a form to change your **Email**.
+    - Change your **Email** to an any arbitrary **@dontwannacry.com** email.
+
+    ```plaintext
+    https://<lab_url>//my-account/change-email      POST    (email=attacker%40dontwannacry.com&csrf=...)
+
+
+    Your email is: attacker@dontwannacry.com
+    ```
+
+2. #### **Weak isolation on dual-use endpoint**
+
+    - After login interact with the functionalities of the site and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    ...
+    https://<lab_url>/my-account/change-email       POST    (email=psycho%40dontwannacry.com.com&csrf=...)
+    ...
+    https://<lab_url>/my-account/change-password    POST    (csrf=...&username=wiener&current-password=peter&new-password-1=psycho&new-password-2=psycho)
+    ...
+    ```
+
+    - Send the **/change-password POST** request to the **Repeater**.
+    - Delete all the parameters one by one while you repeat the request and see what happens  
+    (notice that the **current-password** is not required).
+
+    ```plaintext
+    https://<lab_url>/my-account/change-password    POST    (csrf=...&username=wiener&new-password-1=psycho&new-password-2=psycho)
+    ```
+
+    - Set the **username** as **administrator** and repeat the request again, then logout and login as **administrator**.
+
+    ```plaintext
+    https://<lab_url>/my-account/change-password    POST    (csrf=...&username=administrator&new-password-1=psycho&new-password-2=psycho)
+    ```
+
+3. #### **Password reset broken logic** (repeated)
+
+    > 📝 **Note:**
+    <mark>This example is located within the **Vulnerabilities in other authentication mechanisms**
+    section of the **Authentication** topic.</mark>
+
+4. #### **2FA simple bypass** (repeated)
+
+    > 📝 **Note:**
+    <mark>This example is located within the **Vulnerabilities in multi-factor authentication**
+    section of the **Authentication** topic.</mark>
+
+5. #### **Insufficient workflow validation**
+
+    - After login try to buy the product and take note of the URL flow and the parameters sent, the message  
+    ***Not enough store credit for this purchase*** will appear when you try to **Place order**.
+
+    ```plaintext
+    ...
+    https://<lab_url>/cart                      POST    (productId=1&redir=PRODUCT&quantity=1)
+    ...
+    https://<lab_url>/cart/checkout             POST    (csrf=...)
+    https://<lab_url>/cart                      GET     (err=INSUFFICIENT_FUNDS)
+    ...
+    ```
+
+    - **Remove** the product from the cart.
+    - Repeat the purchase process with another product you can afford with your current balance
+    and take note of the URL flow and the parameters sent, the message  
+    ***Your order is on its way!*** will appear when you **Place order**.
+
+    ```plaintext
+    ...
+    https://<lab_url>/cart                      POST    (productId=2&redir=PRODUCT&quantity=1)
+    ...
+    https://<lab_url>/cart/checkout             POST    (csrf=...)
+    https://<lab_url>/cart/order-confirmation   GET     (order-confirmed=true)
+    ...
+    ```
+
+    - Send the first **/cart POST** and the second **/cart/order-confirmation GET** requests to the
+    **Repeater**.
+    - Repeat both requests.
+
+6. #### **Authentication bypass via flawed state machine**
+
+    - Login and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    ...
+    https://<lab_url>/login             POST    (csrf=...&username=wiener&password=peter)
+    https://<lab_url>/role-selector     GET
+    https://<lab_url>/role-selector     POST    (role=content-author&csrf=...)
+    ...
+    https://<lab_url>/my-account        GET     (id=wiener)
+    ...
+    ```
+
+    - Try to access to **/admin**, the message  
+    ***Admin interface only available if logged in as an administrator*** will appear.
+    - Logout and login again but intercept and **Forward** the **/login POST** request, then **Drop** the next **/role-selector GET** request.
+    - Access directly to the **/my-accout** url  
+    (notice that your role has been set by default as administrator).
+
+### [Domain-specific flaws][business_logic_4]
+
+1. #### **Flawed enforcement of business rules**
+
+    - After login try to buy the product, the message  
+    ***Not enough store credit for this purchase*** will appear when you try to **Place order**.
+    - Observe there's a message for new customers on the top of the page:  
+    ***New customers use code at checkout: NEWCUST5***.
+    - Also observe there's a form to sign up for newsletter at the bottom of the main page.
+    - After sign up for the newsletter, the message  
+    ***Use coupon SIGNUP30 at checkout!*** will appear.
+    - ***Try applying the codes more than once. Notice that if you enter the same code twice in a row,
+    it is rejected because the coupon has already been applied.
+    However, if you alternate between the two codes, you can bypass this control.***
+    - Apply both codes as many times as you need to decrease the **Total**
+    below your current balance, then proceed to **Place order**.
+
+2. #### **Infinite money logic flaw**
+
+    - After login try to buy the product, the message  
+    ***Not enough store credit for this purchase*** will appear when you try to **Place order**.
+    - Observe there's a form to sign up for newsletter at the bottom of the main page.
+    - After sign up for the newsletter, the message  
+    ***Use coupon SIGNUP30 at checkout!*** will appear.
+    - Observe ***you can buy $10 gift cards and redeem them from the "My account" page.***
+    - Buy and redeem a **Gift Card** and take note of the URL flow and the parameters sent  
+    (don't forget to use the coupon before the purchase).
+
+    ```plaintext
+    ...
+    https://<lab_url>/cart                      POST    (productId=2&redir=PRODUCT&quantity=1)
+    ...
+    https://<lab_url>/cart/coupon               POST    (csrf=...&coupon=SIGNUP30)
+    ...
+    https://<lab_url>/cart/checkout             POST    (csrf=...)
+    https://<lab_url>/cart/order-confirmation   GET     (order-confirmed=true)
+    ...
+    https://<lab_url>/gift-card                 POST    (csrf=...&gift-card=<code>)
+    ```
+
+    - Observe after the card redeem, you current balance increases by **$3**.
+    - Set up a **MACRO** to repeat the purchase-redeem process, then proceed to **Place order**.
+
+### [Providing an encryption oracle][business_logic_5]
+
+1. #### **Authentication bypass via encryption oracle**
+
+    ```plaintext
+    PENDING
+    ```
+
+[business_logic]:   https://portswigger.net/web-security/logic-flaws
+[business_logic_1]: https://portswigger.net/web-security/logic-flaws/examples#excessive-trust-in-client-side-controls
+[business_logic_2]: https://portswigger.net/web-security/logic-flaws/examples#failing-to-handle-unconventional-input
+[bussiness_logic_script_low_level]: https://github.com/UDPsycho/SecurityLabs/tree/main/Web%20Security%20Academy/Resources/Business%20Logic/Low-level%20logic%20flaw
+[business_logic_3]: https://portswigger.net/web-security/logic-flaws/examples#making-flawed-assumptions-about-user-behavior
+[business_logic_4]: https://portswigger.net/web-security/logic-flaws/examples#domain-specific-flaws
+[business_logic_5]: https://portswigger.net/web-security/logic-flaws/examples#providing-an-encryption-oracle
+
+---
+
+<!--
 ## **Information Disclosure**
 
 ## **Access Control**
